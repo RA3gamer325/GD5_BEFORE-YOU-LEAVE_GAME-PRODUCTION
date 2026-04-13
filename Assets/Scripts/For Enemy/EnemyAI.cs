@@ -1,239 +1,321 @@
 using UnityEngine;
 using UnityEngine.AI;
+using System.Collections;
 
 public class EnemyAI : MonoBehaviour
 {
-    [Header("Navigation")]
-    public NavMeshAgent agent;
+    [Header("Player Detection")]
     public Transform player;
-    public LayerMask whatIsGround, whatIsPlayer;
+    public float sightRange = 10f;
+    public float sightAngle = 120f;
+    public LayerMask sightLayers = -1;
+    public float viewDistance = 20f;
+    
+    [Header("Patrol")]
+    public float patrolSpeed = 2f;
+    public Transform[] patrolPoints;
+    public float waitAtPatrolPoint = 2f;
+    
+    [Header("Chase")]
+    public float chaseSpeed = 5f;
+    public float attackRange = 2f;
+    
+    [Header("Cover Detection")]
+    public float investigateCoverDelay = 1f;
+    
+    [Header("Priority Detection")]
+    public float confirmedChasePriority = 100f;
+    public float coverInvestigatePriority = 50f;
+    public float patrolPriority = 10f;
 
-    [Header("Patroling")]
-    public Vector3 walkPoint;
-    public float walkPointRange;
-    bool walkPointSet;
-    public float patrolRotationSpeed = 5f;
-    public float patrolSpeed = 3f;
-    public float lookAroundSpeed = 2f;
-    public float patrolDelay = 2f;
-    float patrolDelayTimer;
-    bool isPatrolDelayActive;
+    [Header("Game Over / Jumpscare")]
+    public bool hasKilledPlayer = false;
+    public float killDelay = 1.5f;
+    public GameObject jumpscareUI;
+    public Camera playerCamera;
 
-    [Header("Attacking")]
-    public float timeBetweenAttacks;
-    float lastAttackTime;
+    // State
+    private enum AIState { Patrolling, Chasing, InvestigatingCover, SearchingCover }
+    private AIState currentState = AIState.Patrolling;
 
-    [Header("Detection")]
-    public float sightRange;
-    public float detectionAngleThreshold = 60f;
-    public float detectionBuffer = 10f; // Extra buffer for detection
-    public float chaseRange = 15f; // Range to continue chasing after detection
-    Vector3 lastKnownPlayerPosition;
-    float lastSeenTime;
-    public float playerLostTime = 3f; // How long to remember player after losing sight
+    // Components
+    private NavMeshAgent agent;
+    private Animator animator;
 
-    [Header("States")]
-    public bool playerInSightRange;
-    public bool playerInAngleRange;
-    public bool playerDetected; // Overall detection state
+    // Detection
+    [HideInInspector] public bool playerDetected;
+    private Vector3 lastKnownPlayerPosition;
+    private float lastSeenTime;
+    private float lastConfirmedSightTime = 0f;
+    public float confirmedSightMemory = 2f;
 
-    private void Awake()
+    // Patrol
+    private int currentPatrolIndex;
+    private float waitTime;
+
+    // Priority
+    private float currentPriority = 0f;
+
+    void Start()
     {
-        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-        if (playerObj != null)
-        {
-            player = playerObj.transform;
-        }
-        else
-        {
-            Debug.LogError("Player GameObject not found! Tag it as 'Player'.");
-        }
-
         agent = GetComponent<NavMeshAgent>();
-        if (agent == null)
-        {
-            Debug.LogError("NavMeshAgent component not found on this enemy!");
-        }
-        else
+        animator = GetComponent<Animator>();
+
+        if (agent != null)
         {
             agent.speed = patrolSpeed;
-            agent.angularSpeed = 180f;
-            agent.acceleration = 1000f;
             agent.stoppingDistance = 0.5f;
-            agent.autoRepath = true;
         }
+
+        if (patrolPoints.Length > 0)
+            agent.SetDestination(patrolPoints[0].position);
     }
 
-    private void Update()
+    void Update()
     {
-        // Check if player is within sight range
-        playerInSightRange = Physics.CheckSphere(transform.position, sightRange + detectionBuffer, whatIsPlayer);
-        
-        // Check if player is within the enemy's forward-facing angle
-        playerInAngleRange = CheckAngleToPlayer();
-        
-        // Check if player is within chase range (for memory)
-        bool playerInChaseRange = Vector3.Distance(transform.position, player.position) < chaseRange;
-        
-        // Overall detection state
-        playerDetected = playerInSightRange && playerInAngleRange;
-        
-        // Update last known position
-        if (playerDetected)
-        {
-            lastKnownPlayerPosition = player.position;
-            lastSeenTime = Time.time;
-        }
-        
-        // Check if player is still remembered
-        bool playerStillRemembered = (Time.time - lastSeenTime) < playerLostTime;
+        if (hasKilledPlayer) return;
 
-        // State Machine
-        if (!playerDetected && !playerStillRemembered)
-        {
-            Patroling();
-        }
-        else if (playerDetected || playerStillRemembered)
-        {
-            ChasePlayer();
-        }
+        HandleDetection();
+        CalculatePriorities();
+        UpdateStateMachine();
     }
 
-    private bool CheckAngleToPlayer()
+    void HandleDetection()
     {
-        if (player == null) return false;
+        playerDetected = false;
+
+        if (player == null) return;
 
         Vector3 directionToPlayer = (player.position - transform.position).normalized;
-        float angle = Vector3.Angle(transform.forward, directionToPlayer);
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
 
-        return angle < detectionAngleThreshold;
+        if (distanceToPlayer <= sightRange)
+        {
+            float angle = Vector3.Angle(transform.forward, directionToPlayer);
+
+            if (angle < sightAngle * 0.5f &&
+                !Physics.Raycast(transform.position, directionToPlayer, distanceToPlayer, sightLayers))
+            {
+                playerDetected = true;
+                lastKnownPlayerPosition = player.position;
+                lastSeenTime = Time.time;
+                lastConfirmedSightTime = Time.time;
+            }
+        }
     }
 
-    private void Patroling()
+    void CalculatePriorities()
     {
-        if (!walkPointSet)
+        float chasePriority = 0f;
+        float coverPriority = 0f;
+        float patrolPrio = patrolPriority;
+
+        if (playerDetected)
         {
-            SearchWalkPoint();
+            chasePriority = confirmedChasePriority;
+        }
+        else if ((Time.time - lastConfirmedSightTime) < confirmedSightMemory)
+        {
+            chasePriority = confirmedChasePriority * 0.8f;
+        }
+        else if (!playerDetected && (Time.time - lastSeenTime) < investigateCoverDelay)
+        {
+            coverPriority = coverInvestigatePriority;
         }
 
-        if (walkPointSet && agent != null)
+        currentPriority = Mathf.Max(patrolPrio, chasePriority, coverPriority);
+
+        if (chasePriority >= confirmedChasePriority * 0.7f)
         {
-            agent.SetDestination(walkPoint);
-            RotateTowardsWalkPoint();
-            LookAround();
+            currentState = AIState.Chasing;
+        }
+        else if (coverPriority > patrolPrio)
+        {
+            currentState = AIState.InvestigatingCover;
+        }
+        else
+        {
+            currentState = AIState.Patrolling;
+        }
+    }
 
-            if (agent.remainingDistance < 0.5f && !agent.pathPending)
+    void UpdateStateMachine()
+    {
+        UpdateAnimations();
+
+        switch (currentState)
+        {
+            case AIState.Patrolling:
+                Patrolling();
+                break;
+
+            case AIState.Chasing:
+                ChasePlayerConfirmed();
+                break;
+
+            case AIState.InvestigatingCover:
+                InvestigateCover();
+                break;
+
+            case AIState.SearchingCover:
+                SearchCover();
+                break;
+        }
+    }
+
+    void UpdateAnimations()
+    {
+        if (animator == null) return;
+
+        bool isMoving = agent.velocity.magnitude > 0.1f;
+
+        animator.SetBool("isWalking", currentState == AIState.Patrolling && isMoving);
+        animator.SetBool("isChasing", currentState == AIState.Chasing && isMoving);
+    }
+
+    void Patrolling()
+    {
+        ResetPatrolSpeed();
+
+        if (!agent.pathPending && agent.remainingDistance < 0.5f)
+        {
+            if (waitTime <= 0f)
             {
-                if (!isPatrolDelayActive)
+                if (patrolPoints.Length == 0)
                 {
-                    isPatrolDelayActive = true;
-                    patrolDelayTimer = patrolDelay;
-                }
-
-                if (patrolDelayTimer > 0)
-                {
-                    patrolDelayTimer -= Time.deltaTime;
+                    Vector3 randomPoint = transform.position + Random.insideUnitSphere * 10f;
+                    NavMeshHit hit;
+                    if (NavMesh.SamplePosition(randomPoint, out hit, 10f, 1))
+                        agent.SetDestination(hit.position);
                 }
                 else
                 {
-                    isPatrolDelayActive = false;
-                    walkPointSet = false;
+                    currentPatrolIndex = (currentPatrolIndex + 1) % patrolPoints.Length;
+                    agent.SetDestination(patrolPoints[currentPatrolIndex].position);
                 }
+
+                waitTime = waitAtPatrolPoint;
+            }
+            else
+            {
+                waitTime -= Time.deltaTime;
             }
         }
     }
 
-    private void RotateTowardsWalkPoint()
+    void ChasePlayerConfirmed()
     {
-        Vector3 directionToWalkPoint = (walkPoint - transform.position).normalized;
-        Quaternion targetRotation = Quaternion.LookRotation(directionToWalkPoint);
-        transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, patrolRotationSpeed * Time.deltaTime);
-    }
+        IncreaseSpeedForChase();
 
-    private void LookAround()
-    {
-        float lookAroundAmount = lookAroundSpeed * Time.deltaTime;
-        transform.Rotate(Vector3.up, lookAroundAmount, Space.World);
-    }
+        if (agent == null || player == null) return;
 
-    private void SearchWalkPoint()
-    {
-        float randomZ = Random.Range(-walkPointRange, walkPointRange);
-        float randomX = Random.Range(-walkPointRange, walkPointRange);
+        Vector3 chaseTarget;
 
-        walkPoint = new Vector3(transform.position.x + randomX, transform.position.y, transform.position.z + randomZ);
-
-        NavMeshHit hit;
-        if (NavMesh.SamplePosition(walkPoint, out hit, 2f, NavMesh.AllAreas))
+        if (playerDetected)
         {
-            walkPoint = hit.position;
-            walkPointSet = true;
+            Rigidbody playerRb = player.GetComponent<Rigidbody>();
+            Vector3 playerVelocity = playerRb != null ? playerRb.linearVelocity : Vector3.zero;
+
+            chaseTarget = player.position + playerVelocity * 0.5f;
         }
         else
         {
-            walkPointSet = false;
-            Debug.Log("Walk point not on NavMesh, trying again...");
+            chaseTarget = lastKnownPlayerPosition;
+        }
+
+        agent.SetDestination(chaseTarget);
+        RotateTowardsTarget(chaseTarget);
+
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+
+        if (distanceToPlayer < attackRange)
+        {
+            AttackPlayer();
         }
     }
 
-    private void ChasePlayer()
+    void InvestigateCover()
     {
-        if (agent != null && player != null)
-        {
-            // Chase towards player or last known position
-            Vector3 chaseTarget = playerDetected ? player.position : lastKnownPlayerPosition;
-            agent.SetDestination(chaseTarget);
-            
-            // Rotate towards player while chasing
-            Vector3 directionToPlayer = (player.position - transform.position).normalized;
-            Quaternion targetRotation = Quaternion.LookRotation(directionToPlayer);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, patrolRotationSpeed * Time.deltaTime);
+        ResetPatrolSpeed();
+        agent.SetDestination(lastKnownPlayerPosition);
 
-            // Attack if player is close enough
-            if (Vector3.Distance(transform.position, player.position) < sightRange * 0.5f)
-            {
-                AttackPlayer();
-            }
+        if (!agent.pathPending && agent.remainingDistance < 0.5f)
+        {
+            currentState = AIState.SearchingCover;
         }
     }
 
-    private void AttackPlayer()
+    void SearchCover()
     {
-        if (Time.time - lastAttackTime >= timeBetweenAttacks)
+        ResetPatrolSpeed();
+        RotateTowardsTarget(lastKnownPlayerPosition);
+
+        if ((Time.time - lastSeenTime) > 5f)
         {
-            if (CheckAngleToPlayer())
-            {
-                Debug.Log("Enemy Attacked!");
-                lastAttackTime = Time.time;
-            }
+            currentState = AIState.Patrolling;
         }
     }
 
-    private void OnDrawGizmosSelected()
+    void AttackPlayer()
     {
-        // Draw Sight Range (Green Sphere)
-        Gizmos.color = Color.green;
-        Gizmos.DrawWireSphere(transform.position, sightRange + detectionBuffer);
+        if (hasKilledPlayer) return;
 
-        // Draw Chase Range (Blue Sphere)
-        Gizmos.color = Color.blue;
-        Gizmos.DrawWireSphere(transform.position, chaseRange);
+        hasKilledPlayer = true;
 
-        if (sightRange > 0)
+        agent.isStopped = true;
+
+        RotateTowardsTarget(player.position);
+
+        if (animator != null)
+            animator.SetTrigger("Attack");
+
+        StartCoroutine(HandleGameOver());
+    }
+
+    IEnumerator HandleGameOver()
+    {
+        yield return new WaitForSeconds(killDelay);
+
+        if (playerCamera != null)
+            playerCamera.enabled = false;
+
+        if (jumpscareUI != null)
+            jumpscareUI.SetActive(true);
+
+        Time.timeScale = 0f;
+    }
+
+    void IncreaseSpeedForChase()
+    {
+        if (agent != null && agent.speed < chaseSpeed)
         {
-            // Draw Detection Angle (Yellow Cone)
-            Gizmos.color = Color.yellow;
-            float coneRadius = sightRange * Mathf.Tan(detectionAngleThreshold * 0.5f * Mathf.Deg2Rad);
-            Vector3 coneBase = transform.position + transform.forward * sightRange;
-            Gizmos.DrawWireSphere(coneBase, coneRadius);
-            
-            Vector3 leftEdge = transform.forward * sightRange;
-            Vector3 rightEdge = transform.forward * sightRange;
-            Quaternion leftRot = Quaternion.Euler(0, detectionAngleThreshold * 0.5f, 0);
-            Quaternion rightRot = Quaternion.Euler(0, -detectionAngleThreshold * 0.5f, 0);
-            
-            Gizmos.DrawRay(transform.position, leftRot * leftEdge);
-            Gizmos.DrawRay(transform.position, rightRot * rightEdge);
+            agent.speed = chaseSpeed;
         }
+    }
+
+    void ResetPatrolSpeed()
+    {
+        if (agent != null && agent.speed > patrolSpeed)
+        {
+            agent.speed = patrolSpeed;
+        }
+    }
+
+    void RotateTowardsTarget(Vector3 target)
+    {
+        Vector3 direction = (target - transform.position).normalized;
+        direction.y = 0;
+
+        if (direction != Vector3.zero)
+        {
+            Quaternion lookRotation = Quaternion.LookRotation(direction);
+            transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * 5f);
+        }
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = playerDetected ? Color.red : Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, sightRange);
     }
 }

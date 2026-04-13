@@ -46,14 +46,36 @@ public class CoverTrigger : MonoBehaviour
     }
 
     void OnDrawGizmos()
-    {
-        if (!showGizmos) return;
-        
-        Gizmos.color = triggerColor;
-        Gizmos.DrawWireCube(transform.position, transform.localScale);
-        
-        Gizmos.color = Color.yellow;
-        Vector3 crawlBox = new Vector3(transform.localScale.x, 0.6f, transform.localScale.z);
-        Gizmos.DrawWireCube(transform.position + Vector3.up * 0.3f, crawlBox);
-    }
+{
+    if (!showGizmos) return;
+
+    Gizmos.color = triggerColor;
+
+    // 🔥 Proper rotation-aware box
+    Matrix4x4 rotationMatrix = Matrix4x4.TRS(
+        transform.position,
+        transform.rotation,
+        transform.localScale
+    );
+
+    Gizmos.matrix = rotationMatrix;
+    Gizmos.DrawWireCube(Vector3.zero, Vector3.one);
+
+    // Reset matrix (VERY IMPORTANT)
+    Gizmos.matrix = Matrix4x4.identity;
+
+    // Optional crawl box preview
+    Gizmos.color = Color.yellow;
+
+    Matrix4x4 crawlMatrix = Matrix4x4.TRS(
+        transform.position + Vector3.up * 0.3f,
+        transform.rotation,
+        new Vector3(transform.localScale.x, 0.6f, transform.localScale.z)
+    );
+
+    Gizmos.matrix = crawlMatrix;
+    Gizmos.DrawWireCube(Vector3.zero, Vector3.one);
+
+    Gizmos.matrix = Matrix4x4.identity;
+}
 }
