@@ -1,178 +1,121 @@
 using UnityEngine;
 using UnityEngine.Events;
 
-public class LeverPuzzleManager : MonoBehaviour
+public class LeverPuzzle : MonoBehaviour
 {
-    [Header("Assign Your Levers Here")]
-    public Interactable[] allLevers;
-
-    [Header("Correct Combination")]
-    public bool[] correctStates;
-
-    [Header("Animation Settings")]
-    public string leverBoolName = "isOn";
-
+    [Header("Levers")]
+    public Interactable[] levers = new Interactable[3];
+    
+    [Header("Correct Sequence")]
+    public bool[] correctSequence = { true, false, true }; // ON, OFF, ON
+    
+    [Header("Puzzle Settings")]
+    public float solveDelay = 2f;
+    
+    [Header("Events")]
+    public UnityEvent OnPuzzleSolved;
+    public UnityEvent OnPuzzleReset;
+    
+    [Header("Audio")]
+    public AudioClip successSound;
+    public AudioClip failSound;
+    
+    [Header("UI")]
+    public TMPro.TextMeshProUGUI puzzleText;
+    public string waitingText = "Activate the levers in the correct order...";
+    public string solvedText = "PUZZLE SOLVED!";
+    public string resetText = "Reset - Try again!";
+    
+    private AudioSource audioSource;
+    private int currentStep = 0;
     private bool puzzleSolved = false;
-    private bool puzzleFailed = false;
 
-    private void Start()
+    void Start()
     {
-        if (allLevers != null)
-        {
-            foreach (Interactable lever in allLevers)
-            {
-                if (lever != null)
-                {
-                    lever.OnInteraction.AddListener(CheckPuzzle);
-                }
-            }
-        }
-
-        Debug.Log("=== Lever Puzzle System Started ===");
-        Debug.Log($"Total Levers: {allLevers?.Length ?? 0}");
-        Debug.Log($"Correct States: {correctStates?.Length ?? 0}");
+        audioSource = GetComponent<AudioSource>();
+        ResetPuzzle();
     }
 
-    public void CheckPuzzle()
+    public void OnLeverActivated(Interactable lever)
     {
-        if (puzzleSolved)
+        if (puzzleSolved) return;
+
+        // Find which lever was activated
+        int leverIndex = System.Array.IndexOf(levers, lever);
+        if (leverIndex == -1) return;
+
+        // Check if correct state for this step
+        if (lever.GetState() == correctSequence[currentStep])
         {
-            Debug.Log("Puzzle Already Solved!");
-            return;
-        }
-
-        if (puzzleFailed)
-        {
-            Debug.Log("Puzzle Failed - Resetting...");
-            ResetAllLeverAnimations();
-            puzzleFailed = false;
-            return;
-        }
-
-        if (allLevers != null && correctStates != null && allLevers.Length == correctStates.Length)
-        {
-            bool allCorrect = true;
-
-            for (int i = 0; i < allLevers.Length; i++)
-            {
-                if (allLevers[i] != null)
-                {
-                    bool currentState = allLevers[i].GetLeverState();
-                    bool expectedState = correctStates[i];
-                    
-                    Debug.Log($"Lever {i + 1}: Current={currentState}, Expected={expectedState}");
-                    
-                    if (currentState != expectedState)
-                    {
-                        allCorrect = false;
-                    }
-                }
-            }
-
-            if (allCorrect)
+            currentStep++;
+            
+            if (currentStep >= levers.Length)
             {
                 SolvePuzzle();
             }
             else
             {
-                FailPuzzle();
+                UpdateUIText(waitingText);
+                PlaySound(successSound);
             }
         }
         else
         {
-            Debug.LogError("Lever count doesn't match correct states count!");
+            FailPuzzle();
         }
     }
 
     void SolvePuzzle()
     {
         puzzleSolved = true;
-        Debug.Log("========================================");
-        Debug.Log("🎉 PUZZLE SOLVED! 🎉");
-        Debug.Log("========================================");
-        Debug.Log("All levers are in correct positions!");
+        UpdateUIText(solvedText);
+        PlaySound(successSound);
+        OnPuzzleSolved?.Invoke();
+        
+        // Optional: Lock levers after solve
+        foreach (var lever in levers)
+        {
+            lever.enabled = false;
+        }
     }
 
     void FailPuzzle()
     {
-        puzzleFailed = true;
-        Debug.Log("========================================");
-        Debug.Log("❌ PUZZLE FAILED ❌");
-        Debug.Log("========================================");
-        Debug.Log("Resetting all lever animations...");
-        
-        ResetAllLeverAnimations();
-        
-        Debug.Log("All levers reset to OFF state.");
-    }
-
-    public void ResetAllLeverAnimations()
-    {
-        if (allLevers != null)
-        {
-            foreach (Interactable lever in allLevers)
-            {
-                if (lever != null)
-                {
-                    lever.SetLeverState(false);
-                    Debug.Log($"Lever reset to OFF");
-                }
-            }
-        }
-    }
-
-    public void ResetPuzzleManually()
-    {
-        puzzleSolved = false;
-        puzzleFailed = false;
-        ResetAllLeverAnimations();
-        Debug.Log("=== Puzzle Reset Manually ===");
+        ResetPuzzle();
+        PlaySound(failSound);
     }
 
     void ResetPuzzle()
     {
-        puzzleFailed = false;
-        Debug.Log("=== Auto Reset After 3 Seconds ===");
+        currentStep = 0;
+        puzzleSolved = false;
+        UpdateUIText(waitingText);
+        OnPuzzleReset?.Invoke();
     }
 
-    private void OnDestroy()
+    void UpdateUIText(string text)
     {
-        if (allLevers != null)
+        if (puzzleText != null)
+            puzzleText.text = text;
+    }
+
+    void PlaySound(AudioClip clip)
+    {
+        if (audioSource != null && clip != null)
+            audioSource.PlayOneShot(clip);
+    }
+
+    // Public reset method (for buttons/doors/etc)
+    public void Reset()
+    {
+        ResetPuzzle();
+        foreach (var lever in levers)
         {
-            foreach (Interactable lever in allLevers)
-            {
-                if (lever != null)
-                {
-                    lever.OnInteraction.RemoveListener(CheckPuzzle);
-                }
-            }
+            lever.enabled = true;
+            lever.SetState(false);
         }
     }
 
-    private void OnGUI()
-    {
-        GUILayout.BeginArea(new Rect(10, 10, 300, 200));
-        GUILayout.Label("=== Lever Puzzle Debug ===");
-        
-        if (allLevers != null)
-        {
-            for (int i = 0; i < allLevers.Length; i++)
-            {
-                if (allLevers[i] != null)
-                {
-                    GUILayout.Label($"Lever {i + 1}: {allLevers[i].GetLeverState()}");
-                }
-            }
-        }
-        
-        GUILayout.Label($"Puzzle Solved: {puzzleSolved}");
-        GUILayout.Label($"Puzzle Failed: {puzzleFailed}");
-        
-        if (GUILayout.Button("Reset Puzzle"))
-        {
-            ResetPuzzleManually();
-        }
-        
-        GUILayout.EndArea();
-    }
+    // Check if puzzle is solved
+    public bool IsSolved() => puzzleSolved;
 }

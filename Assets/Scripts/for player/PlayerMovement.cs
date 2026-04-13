@@ -37,11 +37,15 @@ public class PlayerMovement : MonoBehaviour
     }
 
     void Update()
-    {
-        HandleMovement();
-        HandlePosture();
-        UpdateCameraPosition();
-    }
+{
+    // DEBUG: Show crawl state
+    if (isForcedCrawling)
+        Debug.Log("🔒 FORCED CRAWLING");
+    
+    HandleMovement();
+    HandlePosture();
+    UpdateCameraPosition();
+}
 
     void HandleMovement()
     {
@@ -64,30 +68,51 @@ public class PlayerMovement : MonoBehaviour
         controller.Move(moveDirection * currentSpeed * Time.deltaTime);
     }
 
-    void HandlePosture()
+    // Add these PUBLIC methods to PlayerMovement class
+
+[Header("Cover System")]
+public bool isForcedCrawling = false;
+
+public void ForceCrawl(bool force)
+{
+    isForcedCrawling = force;
+}
+
+void HandlePosture()
+{
+    if (isForcedCrawling) // Cover trigger forces crawl
     {
-        if (Input.GetKey(KeyCode.LeftControl)) // Crawl
-        {
-            controller.height = crawlHeight;
-            controller.center = new Vector3(0, crawlHeight / 2f, 0);
-            currentSpeed = crawlSpeed;
-            currentCameraHeight = 0.3f; // Lower camera for crawling
-        }
-        else if (Input.GetKey(KeyCode.C)) // Crouch
-        {
-            controller.height = crouchHeight;
-            controller.center = new Vector3(0, crouchHeight / 2f, 0);
-            currentSpeed = crouchSpeed;
-            currentCameraHeight = 0.8f; // Medium camera height for crouching
-        }
-        else // Stand
-        {
-            controller.height = standingHeight;
-            controller.center = new Vector3(0, standingHeight / 2f, 0);
-            currentSpeed = walkSpeed;
-            currentCameraHeight = 1.6f; // Normal camera height for standing
-        }
+        controller.height = crawlHeight;
+        controller.center = new Vector3(0, crawlHeight / 2f, 0);
+        currentSpeed = crawlSpeed;
+        currentCameraHeight = 0.3f;
+        return;
     }
+
+    // NORMAL INPUT (only when NOT forced)
+    if (Input.GetKey(KeyCode.LeftControl)) // Manual crawl
+    {
+        controller.height = crawlHeight;
+        controller.center = new Vector3(0, crawlHeight / 2f, 0);
+        currentSpeed = crawlSpeed;
+        currentCameraHeight = 0.3f;
+    }
+    else if (Input.GetKey(KeyCode.C)) // Manual crouch
+    {
+        controller.height = crouchHeight;
+        controller.center = new Vector3(0, crouchHeight / 2f, 0);
+        currentSpeed = crouchSpeed;
+        currentCameraHeight = 0.8f;
+    }
+    else // STAND (default when no input + not forced)
+    {
+        controller.height = standingHeight;
+        controller.center = new Vector3(0, standingHeight / 2f, 0);
+        currentSpeed = walkSpeed;
+        currentCameraHeight = 1.6f;
+    }
+}
+
 
     void UpdateCameraPosition()
     {
@@ -116,4 +141,6 @@ public class PlayerMovement : MonoBehaviour
         Gizmos.color = Color.green;
         Gizmos.DrawWireSphere(transform.position + new Vector3(0, 1.6f, 0), 0.3f);
     }
+
+    
 }

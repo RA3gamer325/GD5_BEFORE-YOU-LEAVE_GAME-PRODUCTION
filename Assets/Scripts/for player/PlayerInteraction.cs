@@ -30,11 +30,11 @@ public class PlayerInteraction : MonoBehaviour
 
         if (Physics.Raycast(ray, out hit, interactDistance))
         {
-            if (hit.collider.CompareTag("Interactable"))
+            Interactable newInteractable = hit.collider.GetComponent<Interactable>();
+            
+            if (newInteractable != null && newInteractable.enabled)
             {
-                Interactable newInteractable = hit.collider.GetComponent<Interactable>();
-                
-                if (newInteractable != null && newInteractable.enabled && newInteractable != currentInteractable)
+                if (newInteractable != currentInteractable)
                 {
                     SetNewCurrentInteractable(newInteractable);
                 }
@@ -52,11 +52,14 @@ public class PlayerInteraction : MonoBehaviour
 
     void SetNewCurrentInteractable(Interactable newInteractable)
     {
+        // Disable previous
+        DisableCurrentInteractable();
+        
+        // Set new
         currentInteractable = newInteractable;
         
         if (currentInteractable != null)
         {
-            currentInteractable.EnableOutline();
             HUDcontroller.instance?.EnableInteractionText(currentInteractable.interactionText);
         }
     }
@@ -65,10 +68,18 @@ public class PlayerInteraction : MonoBehaviour
     {
         if (currentInteractable != null)
         {
-            currentInteractable.DisableOutline();
+            HUDcontroller.instance?.DisableInteractionText();
             currentInteractable = null;
         }
-        
-        HUDcontroller.instance?.DisableInteractionText();
+    }
+
+    // Optional: Visualize raycast in Scene view
+    void OnDrawGizmosSelected()
+    {
+        if (playerCamera != null)
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawRay(playerCamera.transform.position, playerCamera.transform.forward * interactDistance);
+        }
     }
 }

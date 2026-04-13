@@ -234,9 +234,16 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
-  isLever: 0
+  OnTurnOn:
+    m_PersistentCalls:
+      m_Calls: []
+  OnTurnOff:
+    m_PersistentCalls:
+      m_Calls: []
+  isToggle: 1
   leverState: 0
   interactionText: DESTROY ME
+  enableDebug: 1
 --- !u!114 &3405813
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1083,6 +1090,17 @@ NavMeshAgent:
   m_BaseOffset: 1
   m_WalkableMask: 4294967295
   m_ObstacleAvoidanceType: 4
+--- !u!114 &906062339 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+  m_PrefabInstance: {fileID: 8741137514689828480}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9afd76c7c563c4e4683f60678e99a321, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &979343286
 GameObject:
   m_ObjectHideFlags: 0
@@ -1477,9 +1495,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c25713cd5c303df4fbdef4f5f3451fb8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  allLevers: []
-  correctStates: 
-  leverBoolName: isOn
+  lightRenderer: {fileID: 0}
+  correctColor: {r: 0, g: 1, b: 0, a: 1}
+  wrongColor: {r: 1, g: 0, b: 0, a: 1}
+  neutralColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
 --- !u!4 &1842698983
 Transform:
   m_ObjectHideFlags: 0
@@ -29926,8 +29945,68 @@ PrefabInstance:
       value: lever
       objectReference: {fileID: 0}
     - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: leverState
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
       propertyPath: leverBoolName
       value: isOn
+      objectReference: {fileID: 0}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOn.m_PersistentCalls.m_Calls.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOff.m_PersistentCalls.m_Calls.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOn.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOff.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOn.m_PersistentCalls.m_Calls.Array.data[0].m_Target
+      value: 
+      objectReference: {fileID: 906062339}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOff.m_PersistentCalls.m_Calls.Array.data[0].m_Target
+      value: 
+      objectReference: {fileID: 906062339}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOn.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOff.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOn.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: Interact
+      objectReference: {fileID: 0}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOff.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: Interact
+      objectReference: {fileID: 0}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOn.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: Interactable, Assembly-CSharp
+      objectReference: {fileID: 0}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOff.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: Interactable, Assembly-CSharp
+      objectReference: {fileID: 0}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOn.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
+      value: UnityEngine.Object, UnityEngine
+      objectReference: {fileID: 0}
+    - target: {fileID: 7723402750149828971, guid: 1abbb720b26f09c4bbd9c746b04bba04, type: 3}
+      propertyPath: OnTurnOff.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
+      value: UnityEngine.Object, UnityEngine
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
